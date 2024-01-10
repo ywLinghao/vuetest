@@ -1,6 +1,6 @@
 {
     "name" : "uniapp-vue3-ui",
-    "appid" : "__UNI__A1D0ECE",
+    "appid" : "__UNI__EBE0AF9",
     "description" : "",
     "versionName" : "1.0.0",
     "versionCode" : "100",
@@ -92,6 +92,9 @@
     "h5" : {
         "devServer" : {
             "https" : false
+        },
+        "router" : {
+            "base" : "/vuetest/"
         }
     }
 }
