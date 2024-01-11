@@ -75,6 +75,22 @@
         		"navigationBarTitleText" : "",
         		"enablePullDownRefresh" : false
         	}
+        },
+        {
+        	"path" : "pages/index/msg",
+        	"style" : 
+        	{
+        		"navigationBarTitleText" : "",
+        		"enablePullDownRefresh" : false
+        	}
+        },
+        {
+        	"path" : "pages/index/big",
+        	"style" : 
+        	{
+        		"navigationBarTitleText" : "",
+        		"enablePullDownRefresh" : false
+        	}
         }
     ],
 	"globalStyle": {
@@ -98,10 +114,10 @@
 			"selectedIconPath": "static/tabbar/home-active.png",
 			"text": "首页"
 		}, {
-			"pagePath": "pages/index/wiki",
+			"pagePath": "pages/index/big",
 			"iconPath": "static/tabbar/wiki.png",
 			"selectedIconPath": "static/tabbar/wiki-active.png",
-			"text": "知识库"
+			"text": "大事件"
 		}
 		, {
 			"pagePath": "pages/my/my",

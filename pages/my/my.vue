@@ -7,11 +7,13 @@
 			</view>
 			<view class="my" :style="{backgroundColor:bgColor}">
 				<view class="my-pic">
-					<uni-icons type="person" size="60" color="white"></uni-icons>
-					<uni-icons class="my-pic-upload" type="cloud-upload" size="18" color="#d4e4ff" @click="btnMyPic"></uni-icons>
+					<image :src="avatarUrl" :style="{height: '100px', borderRadius: '50px' }"></image>
+					<!-- <uni-icons type="person" size="60" color="white"></uni-icons>
+					
+					<uni-icons class="my-pic-upload" type="cloud-upload" size="18" color="#d4e4ff" @click="btnMyPic"></uni-icons> -->
 				</view>
 				<view class="my-info">
-
+					<text>您好，{{ nickName }}</text>
 				</view>
 			</view>
 		</view>
@@ -31,15 +33,22 @@
 </template>
 
 <script>
+	import useUserStore from '@/store/user'
 	export default {
 		data() {
 			return {
 				bgColor: "#2979ff",
 				fontColor: "#ffffff", //只能设置白色和黑色
-				value:9
+				value:9,
+				nickName: '',
+				avatarUrl: ''
 			}
 		},
 		onLoad() {
+			const userStore = useUserStore();
+			const { nickName, avatarUrl } = userStore.userinfo;
+			this.nickName = nickName;
+			this.avatarUrl = avatarUrl;
 			uni.setNavigationBarColor({
 				backgroundColor: this.bgColor,
 				frontColor: this.fontColor

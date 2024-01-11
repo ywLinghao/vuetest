@@ -1,251 +1,294 @@
 <template>
-	<view class="view">
-		<view class="title">Connect</view>
-		<text>Host</text>
-		<input type="text" v-model="connection.host"/>
-		<text>Port</text>
-		<input type="text" v-model="connection.port"/>
-		<text>Path</text>
-		<input type="text" v-model="connection.path"/>
-		<text>Client ID</text>
-		<input type="text" :value="connection.clientId" disabled/>
-		<text>Username</text>
-		<input type="text" v-model="connection.username"/>
-		<text>Password</text>
-		<input type="password" v-model="connection.password"/>
-		<text>Keep Alive</text>
-		<input type="text" value="60"/>
-		<view>
-			<checkbox-group :values="selected" @change="handleCheckboxChange">
-		    <checkbox value="CleanSession" checked>Clean Session&nbsp;</checkbox>
-		    <checkbox value="SSL">SSL</checkbox>
-		</checkbox-group>
-		<text class="url">{{connection.protocol}}://{{connection.host}}:{{connection.port}}{{connection.path}}</text>
+	<view class="container">
+		<view class="uni-common-mt">
+			<view class="uni-form-item uni-column">
+				<view class="title">地址</view>
+				<input class="uni-input" placeholder="输入地址" :value="connection.host" />
+			</view>
+			<view class="uni-form-item uni-column">
+				<view class="title">端口</view>
+				<input class="uni-input" placeholder="输入端口" :value="connection.port" />
+			</view>
+			<view class="uni-form-item uni-column">
+				<view class="title">路径</view>
+				<input class="uni-input" placeholder="输入路径" :value="connection.endpoint" />
+			</view>
+			<view class="uni-form-item uni-column">
+				<view class="title">客户端ID</view>
+				<input class="uni-input" placeholder="输入客户端ID(可选)" :value="connection.clientId" />
+			</view>
+			<view class="uni-form-item uni-column">
+				<view class="title">用户名</view>
+				<input class="uni-input" placeholder="输入用户名(可选)" :value="connection.username" />
+			</view>
+			<view class="uni-form-item uni-column">
+				<view class="title">密码</view>
+				<input class="uni-input" placeholder="输入密码(可选)" :value="connection.password" />
+			</view>
+			<view class="uni-form-item uni-column">
+				<view class="title">存活时间</view>
+				<input class="uni-input" placeholder="输入存活时间(默认60)" :value="connection.keep_alive" />
+			</view>
+			<view class="uni-form-item uni-column">
+				<view class="title">订阅主题</view>
+				<input class="uni-input" placeholder="输入需要订阅的主题" :value="subscription.topic" />
+			</view>
+			<view class="uni-form-item uni-column">
+				<view class="title">发布主题</view>
+				<input class="uni-input" placeholder="输入需要发布到的主题" :value="publish.topic" />
+			</view>
+			<view class="uni-form-item uni-column">
+				<view class="title">发布内容</view>
+				<input class="uni-input" placeholder="输入需要发布的内容(常为json)" :value="publish.payload" />
+			</view>
+			<view class="uni-form-item uni-column">
+				<view class="title"></view>
+				<checkbox-group class="cbox" @change="changeUrl">
+					<view>
+						<label class="cbox-label">
+							<checkbox value="CleanSession" checked="true" />清除会话
+						</label>
+						<label class="cbox-label">
+							<!-- #ifndef MP-WEIXIN -->
+							<checkbox value="SSL" />SSL
+							<!-- #endif -->
+							<!-- #ifdef MP-WEIXIN -->
+							<checkbox checked="true" disabled />SSL
+							<!-- #endif -->
+						</label>
+					</view>
+					<view>
+						<label>
+							<text class="uri-text">{{uri}}</text>
+						</label>
+					</view>
+				</checkbox-group>
+			</view>
+			<view class="btn-group">
+				<!-- 连接 -->
+				<button v-if="!connected" @click="createConnection" class="btn-conn" type="default">连接</button>
+				<button v-else class="btn-conn" type="default" disabled>连接</button>
+				<button @click="destroyConnection" type="warn">断开连接</button>
+				<view class="state-text">
+					<text>当前状态:</text>
+					<text v-if="!connected" style="color: rgb(255, 109, 109);">未连接</text>
+					<text v-else style="color: rgb(66, 216, 133);">已连接</text>
+				</view>
+			</view>
+			<view class="btn-group">
+				<!-- 获取主题信息 -->
+				<button @click="doSubscribe" type="primary">订阅主题</button>
+				<button @click="doUnSubscribe" type="warn">取消订阅</button>
+				<button disabled></button>
+			</view>
+			<view class="msg_list">
+				<text>消息列表</text>
+				<p v-for="(item,index) in msgs">{{item.name}}：{{item.msg}}
+					<hr>
+				</p>
+				
+			</view>
 		</view>
-		<view class="btn">
-			<button class="btn1" @click="connectToMQTT" :disabled="btn1Disabled">Connect</button>
-			<button class="btn2" @click="disconnect" :disabled="btn2Disabled">Disconnect</button>
-		</view>
-		<text class="state">Current State: <text id="statetext" :style="connectionStateStyle">{{connection.state}}</text></text>
 	</view>
 </template>
+                
 
-<script setup>
-	import * as mqtt from 'mqtt/dist/mqtt.js';
-	import {
-		reactive,
-		ref,
-		onMounted
-	} from "vue";
-
-	// https://github.com/mqttjs/MQTT.js#qos
-	const qosList = [0, 1, 2];
-	let client = ref({
-		connected: false
-	});
-	const receivedMessages = ref("");
-	const subscribedSuccess = ref(false);
-	const btnLoadingType = ref("");
-	const retryTimes = ref(0);
-	const selected = ref(['CleanSession', 'SSL']);
-	const connectionStateStyle = ref(''); // 样式更改
-	const btn1Disabled = ref(false); // 初始状态下连接按钮可点击
-	const btn2Disabled = ref(true); // 初始状态下断开按钮不可点击
-	var statetextelement; // 根据id获取操作元素
-	var flag = ref(0);
-	let protocal = "";
-	//如你的链接是wss:则修改为wxs:,如果你的链接是ws:则修改为wx:
-	// #ifdef H5
-	protocal = "ws"
-	flag.value = 1;
-	// #endif
-	// #ifdef MP-WEIXIN
-	protocal = "wx"
-	flag.value = 2;
-	// #endif
-	
-	// 监听复选框的变化事件
-	const handleCheckboxChange = (values) => {
-		const selectedValues = values.detail.value; // 通过 values.detail 获取选中值的数组
-		console.log('selected.value:', selected.value);
-	  if (selectedValues.includes('SSL')) {
-	    // SSL 被勾选，调用方法
-	    change();
-	  } else {
-	    // SSL 不被勾选，调用方法
-	    rechange();
-	  }
-	  if (selectedValues.includes('CleanSession')) {
-	    // CleanSession 被勾选，调用方法
-	    clean();
-	  } else {
-	    // CleanSession 不被勾选，调用方法
-	    noclean();
-	  }
-	};
-	const change = () => {
-		if(flag.value === 1){
-			connection.protocol = "wss"
-		}else if(flag.value === 2){
-			connection.protocol = "wxs"
-		}
-	};
-	const rechange = () => {
-		if(flag.value === 1){
-			connection.protocol = "ws"
-		}else if(flag.value === 2){
-			connection.protocol = "wx"
-		}
-	};
-	const clean = () => {
-		connection.clean = true
-	};
-	const noclean = () => {
-		connection.clean = false
-	};
-	const stylered = () => {
-		if(flag.value == 1){
-			statetextelement = document.getElementById("statetext");
-			if (statetextelement) {
-				statetextelement.style.color = "red";
-			}
-		}else if(flag.value == 2){
-			connectionStateStyle.value = 'color: red;';
-		}
-	};
-	const stylegreen = () => {
-		if(flag.value == 1){
-			statetextelement = document.getElementById("statetext");
-			if (statetextelement) {
-				statetextelement.style.color = "green";
-			}
-		}else if(flag.value == 2){
-			connectionStateStyle.value = 'color: green;';
-		}
-	};
-	const connection = reactive({
-		// ws or wss
-		protocol: protocal,
-		host: "jqrjq.cn",
-		// ws -> 8083; wss -> 8084
-		port: 8083,
-		path: "/mqtt",
-		clientId: "emqx_vue3_" + Math.random().toString(16).substring(2, 8),
-		/**
-		 * By default, EMQX allows clients to connect without authentication.
-		 * https://docs.emqx.com/en/enterprise/v4.4/advanced/auth.html#anonymous-login
-		 */
-		username: "",
-		password: "",
-		state: ref("DISCONNECTED"),
-		clean: true,
-		connectTimeout: 30 * 1000, // ms
-		reconnectPeriod: 4000, // ms
-		// for more options and details, please refer to https://github.com/mqttjs/MQTT.js#mqttclientstreambuilder-options
-	});
-	const handleOnReConnect = () => {
-		retryTimes.value += 1;
-		if (retryTimes.value > 5) {
-			try {
-				client.value.end();
-				initData();
-				console.log("connection maxReconnectTimes limit, stop retry");
-			} catch (error) {
-				console.log("handleOnReConnect catch error:", error);
-				btn1Disabled.value = false;
-			}
-		}
-	};
-	const createConnection = () => {
-			connection.state = "CONNECTING";
-			btn1Disabled.value = true;
-			try {
-				const {
-					protocol,
-					host,
-					port,
-					path,
-					...options
-				} = connection;
-				const connectUrl = `${protocol}://${host}:${port}${path}`;
-
-				/**
-				 * if protocol is "ws", connectUrl = "ws://broker.emqx.io:8083/mqtt"
-				 * if protocol is "wss", connectUrl = "wss://broker.emqx.io:8084/mqtt"
-				 * 
-				 * /mqtt: MQTT-WebSocket uniformly uses /path as the connection path,
-				 * which should be specified when connecting, and the path used on EMQX is /mqtt.
-				 * 
-				 * for more details about "mqtt.connect" method & options,
-				 * please refer to https://github.com/mqttjs/MQTT.js#mqttconnecturl-options
-				 */
-				client.value = mqtt.connect(connectUrl, options);
-
-				if (client.value.on) {
-					// https://github.com/mqttjs/MQTT.js#event-connect
-					client.value.on("connect", () => {
-						btnLoadingType.value = "";
-						connection.state = "CONNECTED"; 
-						stylegreen();
-						console.log("connection successful");
-						btn2Disabled.value = false;
-					});
-
-					// https://github.com/mqttjs/MQTT.js#event-reconnect
-					client.value.on("reconnect", handleOnReConnect);
-
-					// https://github.com/mqttjs/MQTT.js#event-error
-					client.value.on("error", (error) => {
-						console.log("connection error:", error);
-					});
-
-					// https://github.com/mqttjs/MQTT.js#event-message
-					client.value.on("message", (topic, message) => {
-						receivedMessages.value = receivedMessages.value.concat(
-							message.toString()
-						);
-						console.log(`received message: ${message} from topic: ${topic}`);
-					});
+<script>
+		import mqtt from 'mqtt/dist/mqtt';
+		export default {
+			computed: {
+				uri() {
+					const {
+						protocol,
+						host,
+						port,
+						endpoint
+					} = this.connection;
+					return `${protocol}://${host}:${port}${endpoint}`;
+				},
+			},
+			data() {
+				return {
+					//连接参数
+					connection: {
+						// #ifdef MP-WEIXIN
+						protocol: "wxs",
+						port: 8084,
+						// #endif
+						// #ifndef MP-WEIXIN
+						protocol: "ws",
+						port: 8083,
+						// #endif
+						// ws: 8083; wss: 8084
+						host: "jqrjq.cn",
+						endpoint: "/mqtt",
+						// for more options, please refer to https://github.com/mqttjs/MQTT.js#mqttclientstreambuilder-options
+						clean: true,
+						connectTimeout: 30 * 1000, // ms
+						reconnectPeriod: 4000, // ms
+						clientId: "emqx_vue_" + Math.random().toString(16).substring(2, 8),
+						// auth
+						username: "emqx_test",
+						password: "emqx_test",
+						keep_alive: 60,
+					},
+					//订阅
+					subscription: {
+						topic: "topic/mqttx",
+						qos: 0,
+					},
+					//发布
+					publish: {
+						topic: "topic/browser",
+						qos: 0,
+						payload: '{ "msg": "Hello, I am browser." }',
+					},
+					receiveNews: "",
+					qosList: [0, 1, 2],
+					client: {
+						connected: false,
+					},
+					subscribeSuccess: false,
+					connecting: false,
+					retryTimes: 0,
+					ssl: false,
+					connected: false,
+					//消息列表
+					msgs:[]
 				}
-			} catch (error) {
-				console.log("mqtt.connect error:", error);
-				btn1Disabled.value = false;
-				btn2Disabled.value = true;
-			}
-	};
+			},
+			methods: {
+				//方法、参数参考https://www.emqx.com/en/blog/how-to-use-mqtt-in-vue
+				//初始化
+				initData() {
+					this.client = {
+						connected: false,
+					};
+					this.retryTimes = 0;
+					this.connecting = false;
+					this.subscribeSuccess = false;
+				},
+				//重连操作
+				handleOnReConnect() {
+					this.retryTimes += 1;
+					if (this.retryTimes > 5) {
+						try {
+							this.client.end();
+							this.initData();
+							this.$message.error("Connection maxReconnectTimes limit, stop retry");
+						} catch (error) {
+							this.$message.error(error.toString());
+						}
+					}
+				},
+				createConnection() {
+					try {
+						this.connecting = true;
+						const {
+							protocol,
+							host,
+							port,
+							endpoint,
+							...options
+						} = this.connection;
+						//连接链接
+						const connectUrl = `${protocol}://${host}:${port}${endpoint}`;
+						this.client = mqtt.connect(connectUrl, options);
+						if (this.client.on) {
+							//连接监听
+							this.client.on("connect", () => {
+								this.connecting = false;
+								this.connected = true;
+								console.log("Connection succeeded!");
+							});
+							//重连监听
+							this.client.on("reconnect", this.handleOnReConnect);
+							//错误监听
+							this.client.on("error", (error) => {
+								console.log("Connection failed", error);
+							});
+							//消息监听
+							this.client.on("message", (topic, message) => {
+								//消息处理
+								// console.log(`Received message ${message} from topic ${topic}`);
+								this.receiveNews = this.receiveNews.concat(message);
+								const data = JSON.parse(message);
+								this.msgs.push(data);
+							});
+						}
+					} catch (error) {
+						//连接失败
+						this.connecting = false;
+						console.log("mqtt.connect error", error);
+					}
+				},
+				//断开连接
+				destroyConnection() {
+					if (this.client.connected) {
+						try {
+							this.client.end(false, () => {
+								this.initData()
+								this.connected = false;
+								console.log('Successfully disconnected!')
+							})
+						} catch (error) {
+							console.log('Disconnect failed', error.toString())
+						}
+					}
+				},
+				//订阅主题
+				doSubscribe() {
+					const {
+						topic,
+						qos
+					} = this.subscription
+					this.client.subscribe(topic, {
+						qos
+					}, (error, res) => {
+						if (error) {
+							console.log('Subscribe to topics error', error)
+							return
+						}
+						this.subscribeSuccess = true
+						console.log('Subscribe to topics res', res)
+					})
+				},
+				//取消订阅
+				doUnSubscribe() {
+				  const { topic } = this.subscription
+				  this.client.unsubscribe(topic, error => {
+				    if (error) {
+				      console.log('Unsubscribe error', error)
+				    }
+				  })
+				},
+				//发布消息
+				doPublish() {
+					const {
+						topic,
+						qos,
+						payload
+					} = this.publish
+					this.client.publish(topic, payload, {
+						qos
+					}, error => {
+						if (error) {
+							console.log('Publish error', error)
+						}
+					})
+				},
+				changeUrl: function(e) {
+					const {
+						value
+					} = e.detail;
+					value.forEach((item) => {
+						this.connection.port = item == "SSL" ? 8084 : 8083;
 	
-	// 移除 onMounted 钩子，不再在组件挂载时自动创建 MQTT 连接
-	// onMounted(() => {
-	// 	createConnection();
-	// })
-	// 使用钩子设置样式
-	onMounted(() => {
-		stylered();
-	});
-	// 手动连接
-	const connectToMQTT = () => {
-		console.log("连接中...")
-	    createConnection();
-	};
-	// 断开连接
-	const disconnect = () => {
-	  if (client.value.connected) {
-	    try {
-	      client.value.end();
-	      // 在断开连接时更新状态
-	      connection.state = "DISCONNECTED";
-		  stylered();
-	      console.log("Disconnected");
-	      // 启用按钮
-	      btn1Disabled.value = false;
-		  btn2Disabled.value = true;
-	    } catch (error) {
-	      console.log("Error disconnecting:", error);
-	    }
-	  } else {
-	    console.log("没有活动连接可断开");
-	  }
-	};
+						this.connection.protocol = item == "SSL" ? "wss" : "ws";
+					})
+				}
+			}
+		}
 </script>
 
 <style>
