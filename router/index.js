@@ -9,7 +9,7 @@ const whiteList = [
 	'/pages/index/crop',
 	'/pages/index/mqtt',
 	'/pages/index/mqttui',
-	'/pages/index/categoryDetail',
+	'/pages/index/wxlogin',
 ]
 
 function hasPermission(url) {
